@@ -10,8 +10,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import uk.tw.energy.domain.ElectricityReading;
 import uk.tw.energy.domain.MeterReadings;
+import uk.tw.energy.service.AccountService;
 import uk.tw.energy.service.MeterReadingService;
+import uk.tw.energy.service.PricePlanService;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,9 +25,13 @@ import java.util.Optional;
 public class MeterReadingController {
 
     private final MeterReadingService meterReadingService;
+    private final AccountService accountService;
+    private final PricePlanService pricePlanService;
 
-    public MeterReadingController(MeterReadingService meterReadingService) {
+    public MeterReadingController(MeterReadingService meterReadingService, AccountService accountService, PricePlanService pricePlanService) {
         this.meterReadingService = meterReadingService;
+        this.accountService = accountService;
+        this.pricePlanService = pricePlanService;
     }
 
     @PostMapping("/store")
@@ -47,5 +56,19 @@ public class MeterReadingController {
         return readings.isPresent()
                 ? ResponseEntity.ok(readings.get())
                 : ResponseEntity.notFound().build();
+    }
+
+    // GET /readings/cost/{smartMeterId} -- last 7 days
+    @GetMapping("/cost/{smartMeterId}")
+    public ResponseEntity readCost(@PathVariable String smartMeterId) {
+        String pricePlanId = accountService.getPricePlanIdForSmartMeterId(smartMeterId);
+        if (pricePlanId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        Optional<BigDecimal> usage = pricePlanService.getCostOfUsage(smartMeterId, pricePlanId, Instant.now().minus(7, ChronoUnit.DAYS), Instant.now());
+        return usage.isPresent()
+                ? ResponseEntity.ok(usage.get())
+                : ResponseEntity.badRequest().build();
     }
 }

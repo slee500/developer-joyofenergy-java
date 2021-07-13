@@ -7,6 +7,7 @@ import uk.tw.energy.domain.PricePlan;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -35,11 +36,25 @@ public class PricePlanService {
                 Collectors.toMap(PricePlan::getPlanName, t -> calculateCost(electricityReadings.get(), t))));
     }
 
+    public Optional<BigDecimal> getCostOfUsage(String smartMeterId, String pricePlanId, Instant start, Instant end) {
+        Optional<List<ElectricityReading>> electricityReadings = meterReadingService.getReadings(smartMeterId, start, end);
+
+        if (!electricityReadings.isPresent()) {
+            return Optional.empty();
+        }
+
+        return pricePlans.stream()
+                .filter(p -> pricePlanId.equals(p.getPlanName()))
+                .findFirst()
+                .map(pricePlan -> calculateCost(electricityReadings.get(), pricePlan));
+
+    }
+
     private BigDecimal calculateCost(List<ElectricityReading> electricityReadings, PricePlan pricePlan) {
         BigDecimal average = calculateAverageReading(electricityReadings);
         BigDecimal timeElapsed = calculateTimeElapsed(electricityReadings);
 
-        BigDecimal averagedCost = average.divide(timeElapsed, RoundingMode.HALF_UP);
+        BigDecimal averagedCost = average.multiply(timeElapsed);
         return averagedCost.multiply(pricePlan.getUnitRate());
     }
 
