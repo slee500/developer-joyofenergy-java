@@ -6,25 +6,34 @@ import org.springframework.http.HttpStatus;
 import uk.tw.energy.builders.MeterReadingsBuilder;
 import uk.tw.energy.domain.ElectricityReading;
 import uk.tw.energy.domain.MeterReadings;
+import uk.tw.energy.service.AccountService;
 import uk.tw.energy.service.MeterReadingService;
+import uk.tw.energy.service.PricePlanService;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
+import java.math.BigDecimal;
+import java.util.*;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.util.AssertionErrors.assertEquals;
 
 public class MeterReadingControllerTest {
 
     private static final String SMART_METER_ID = "10101010";
     private MeterReadingController meterReadingController;
     private MeterReadingService meterReadingService;
+    private AccountService accountService;
+    private PricePlanService pricePlanService;
 
     @BeforeEach
     public void setUp() {
         this.meterReadingService = new MeterReadingService(new HashMap<>());
-        this.meterReadingController = new MeterReadingController(meterReadingService);
+        this.accountService = mock(AccountService.class);
+        this.pricePlanService = mock(PricePlanService.class);
+        this.meterReadingController = new MeterReadingController(meterReadingService, accountService, pricePlanService);
     }
 
     @Test
@@ -84,5 +93,20 @@ public class MeterReadingControllerTest {
     @Test
     public void givenMeterIdThatIsNotRecognisedShouldReturnNotFound() {
         assertThat(meterReadingController.readReadings(SMART_METER_ID).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    public void testViewReadingsCostWithPricePlan() {
+        String PRICE_PLAN_ID = "price-plan-1";
+        when(accountService.getPricePlanIdForSmartMeterId(eq(SMART_METER_ID)))
+                .thenReturn(PRICE_PLAN_ID);
+        when(pricePlanService.getCostOfUsage(eq(SMART_METER_ID), eq(PRICE_PLAN_ID), any(), any()))
+                .thenReturn(Optional.of(BigDecimal.TEN));
+        assertThat(meterReadingController.readCost(SMART_METER_ID).getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    public void testViewReadingsCostWithoutPricePlan() {
+        assertThat(meterReadingController.readCost(SMART_METER_ID).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 }
